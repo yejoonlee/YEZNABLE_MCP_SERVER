@@ -11,14 +11,18 @@ class FileRequest(BaseModel):
     filename: str
     content: str
 
+class FolderRequest(BaseModel):
+    foldername: str
+
 @app.get("/ping")
 def ping():
     return {"status": "awake"}
 
 @app.post("/create-folder")
-def create_folder():
-    os.makedirs(BASE_PATH, exist_ok=True)
-    return {"message": f"Folder created at {BASE_PATH}"}
+def create_folder(req: FolderRequest):
+    path = os.path.join("/tmp", req.foldername)
+    os.makedirs(path, exist_ok=True)
+    return {"message": f"Folder created at {path}"}
 
 @app.post("/write-file")
 def write_file(req: FileRequest):
