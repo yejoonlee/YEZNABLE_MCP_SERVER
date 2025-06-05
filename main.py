@@ -5,14 +5,12 @@ import os
 
 app = FastAPI()
 
-BASE_PATH = "/tmp/gpt_mcp"
-
 class FileRequest(BaseModel):
-    filename: str
+    path: str  # 절대 또는 상대 경로 포함
     content: str
 
 class FolderRequest(BaseModel):
-    foldername: str
+    path: str  # 만들고 싶은 폴더 경로
 
 @app.get("/ping")
 def ping():
@@ -20,61 +18,64 @@ def ping():
 
 @app.post("/create-folder")
 def create_folder(req: FolderRequest):
-    path = os.path.join("/tmp", req.foldername)
-    os.makedirs(path, exist_ok=True)
-    return {"message": f"Folder created at {path}"}
+    try:
+        os.makedirs(req.path, exist_ok=True)
+        return {"message": f"Folder created at {req.path}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/write-file")
 def write_file(req: FileRequest):
-    os.makedirs(BASE_PATH, exist_ok=True)
-    filepath = os.path.join(BASE_PATH, req.filename)
+    folder = os.path.dirname(req.path)
     try:
-        with open(filepath, "w") as f:
+        os.makedirs(folder, exist_ok=True)
+        with open(req.path, "w") as f:
             f.write(req.content)
-        return {"message": f"File written to {filepath}"}
+        return {"message": f"File written to {req.path}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/list-files")
-def list_files():
-    if not os.path.exists(BASE_PATH):
+def list_files(folder: str = Query("/tmp")):
+    if not os.path.exists(folder):
         return {"files": []}
-    files = os.listdir(BASE_PATH)
-    return {"files": files}
+    try:
+        files = os.listdir(folder)
+        return {"files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/read-file")
-def read_file(filename: str = Query(...)):
-    filepath = os.path.join(BASE_PATH, filename)
-    if not os.path.exists(filepath):
+def read_file(path: str = Query(...)):
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     try:
-        with open(filepath, "r") as f:
+        with open(path, "r") as f:
             content = f.read()
-        return {"filename": filename, "content": content}
+        return {"path": path, "content": content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/delete-file")
-def delete_file(filename: str = Query(...)):
-    filepath = os.path.join(BASE_PATH, filename)
-    if not os.path.exists(filepath):
+def delete_file(path: str = Query(...)):
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     try:
-        os.remove(filepath)
-        return {"message": f"Deleted {filename}"}
+        os.remove(path)
+        return {"message": f"Deleted {path}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/clear-folder")
-def clear_folder():
-    if not os.path.exists(BASE_PATH):
+def clear_folder(folder: str = Query(...)):
+    if not os.path.exists(folder):
         return {"message": "Folder does not exist, nothing to clear"}
     try:
-        for f in os.listdir(BASE_PATH):
-            path = os.path.join(BASE_PATH, f)
+        for f in os.listdir(folder):
+            path = os.path.join(folder, f)
             if os.path.isfile(path):
                 os.remove(path)
-        return {"message": "All files deleted"}
+        return {"message": "All files deleted in folder"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
