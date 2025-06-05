@@ -45,6 +45,19 @@ def list_files(folder: str = Query("/tmp")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/list-files-recursive")
+def list_files_recursive(folder: str = Query("/tmp")):
+    if not os.path.exists(folder):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    try:
+        file_tree = {}
+        for root, dirs, files in os.walk(folder):
+            rel_root = os.path.relpath(root, folder)
+            file_tree[rel_root] = files
+        return {"file_tree": file_tree}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/read-file")
 def read_file(path: str = Query(...)):
     if not os.path.exists(path):
