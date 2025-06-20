@@ -1,79 +1,107 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import subprocess
-import os
 import shutil
+import os
+
+from openapi_schema import schema  # 별도 파일로 저장된 스키마 import
 
 app = FastAPI()
 
-class CommandInput(BaseModel):
+# CORS 설정: GPT 요청 허용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 필요시 도메인 제한 가능
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 📘 /openapi.json → Custom GPT에서 참조
+@app.get("/openapi.json")
+def serve_openapi_schema():
+    return JSONResponse(content=schema)
+
+
+# 🛠️ Models
+class Command(BaseModel):
     command: str
 
-class FileOperation(BaseModel):
+class PathInput(BaseModel):
     path: str
-    content: str = None
-    new_path: str = None
 
+class PathWithContent(BaseModel):
+    path: str
+    content: str = ""
+
+class PathWithNewPath(BaseModel):
+    path: str
+    new_path: str
+
+
+# 🔧 /run
 @app.post("/run")
-def run_command(cmd: CommandInput):
-    try:
-        subprocess.Popen(cmd.command, shell=True)
-        return {"status": "executed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def run_command(data: Command):
+    subprocess.Popen(data.command, shell=True)
+    return {"status": "Command executed"}
 
+# 🔧 /run-and-capture
 @app.post("/run-and-capture")
-def run_command_and_capture(cmd: CommandInput):
+def run_command_and_capture(data: Command):
     try:
-        result = subprocess.run(cmd.command, shell=True, capture_output=True, text=True)
+        result = subprocess.run(data.command, shell=True, capture_output=True, text=True, timeout=30)
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
             "returncode": result.returncode
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
+# 🔧 /file/create
 @app.post("/file/create")
-def create_file(op: FileOperation):
+def create_file(data: PathWithContent):
     try:
-        os.makedirs(os.path.dirname(op.path), exist_ok=True)
-        with open(op.path, "w") as f:
-            f.write(op.content or "")
-        return {"status": "created"}
+        with open(data.path, "w") as f:
+            f.write(data.content)
+        return {"status": f"File created at {data.path}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
+# 🔧 /file/delete
 @app.post("/file/delete")
-def delete_file(op: FileOperation):
+def delete_path(data: PathInput):
     try:
-        if os.path.isfile(op.path):
-            os.remove(op.path)
-        elif os.path.isdir(op.path):
-            shutil.rmtree(op.path)
+        if os.path.isdir(data.path):
+            shutil.rmtree(data.path)
+        elif os.path.isfile(data.path):
+            os.remove(data.path)
         else:
-            raise FileNotFoundError("Not found")
-        return {"status": "deleted"}
+            return {"error": "Path does not exist"}
+        return {"status": f"Deleted {data.path}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
+# 🔧 /file/rename
 @app.post("/file/rename")
-def rename_file(op: FileOperation):
+def rename_path(data: PathWithNewPath):
     try:
-        os.rename(op.path, op.new_path)
-        return {"status": "renamed"}
+        os.rename(data.path, data.new_path)
+        return {"status": f"Renamed to {data.new_path}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
+# 🔧 /file/copy
 @app.post("/file/copy")
-def copy_file(op: FileOperation):
+def copy_path(data: PathWithNewPath):
     try:
-        if os.path.isfile(op.path):
-            shutil.copy(op.path, op.new_path)
-        elif os.path.isdir(op.path):
-            shutil.copytree(op.path, op.new_path)
+        if os.path.isdir(data.path):
+            shutil.copytree(data.path, data.new_path)
+        elif os.path.isfile(data.path):
+            shutil.copy2(data.path, data.new_path)
         else:
-            raise FileNotFoundError("Not found")
-        return {"status": "copied"}
+            return {"error": "Source path does not exist"}
+        return {"status": f"Copied to {data.new_path}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
