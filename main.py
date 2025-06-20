@@ -1,97 +1,79 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import uvicorn
+import subprocess
 import os
+import shutil
 
 app = FastAPI()
 
-class FileRequest(BaseModel):
-    path: str  # 절대 또는 상대 경로 포함
-    content: str
+class CommandInput(BaseModel):
+    command: str
 
-class FolderRequest(BaseModel):
-    path: str  # 만들고 싶은 폴더 경로
+class FileOperation(BaseModel):
+    path: str
+    content: str = None
+    new_path: str = None
 
-@app.get("/ping")
-def ping():
-    return {"status": "awake"}
-
-@app.post("/create-folder")
-def create_folder(req: FolderRequest):
+@app.post("/run")
+def run_command(cmd: CommandInput):
     try:
-        os.makedirs(req.path, exist_ok=True)
-        return {"message": f"Folder created at {req.path}"}
+        subprocess.Popen(cmd.command, shell=True)
+        return {"status": "executed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/write-file")
-def write_file(req: FileRequest):
-    folder = os.path.dirname(req.path)
+@app.post("/run-and-capture")
+def run_command_and_capture(cmd: CommandInput):
     try:
-        os.makedirs(folder, exist_ok=True)
-        with open(req.path, "w") as f:
-            f.write(req.content)
-        return {"message": f"File written to {req.path}"}
+        result = subprocess.run(cmd.command, shell=True, capture_output=True, text=True)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/list-files")
-def list_files(folder: str = Query("/tmp")):
-    if not os.path.exists(folder):
-        return {"files": []}
+@app.post("/file/create")
+def create_file(op: FileOperation):
     try:
-        files = os.listdir(folder)
-        return {"files": files}
+        os.makedirs(os.path.dirname(op.path), exist_ok=True)
+        with open(op.path, "w") as f:
+            f.write(op.content or "")
+        return {"status": "created"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/list-files-recursive")
-def list_files_recursive(folder: str = Query("/tmp")):
-    if not os.path.exists(folder):
-        raise HTTPException(status_code=404, detail="Folder not found")
+@app.post("/file/delete")
+def delete_file(op: FileOperation):
     try:
-        file_tree = {}
-        for root, dirs, files in os.walk(folder):
-            rel_root = os.path.relpath(root, folder)
-            file_tree[rel_root] = files
-        return {"file_tree": file_tree}
+        if os.path.isfile(op.path):
+            os.remove(op.path)
+        elif os.path.isdir(op.path):
+            shutil.rmtree(op.path)
+        else:
+            raise FileNotFoundError("Not found")
+        return {"status": "deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/read-file")
-def read_file(path: str = Query(...)):
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+@app.post("/file/rename")
+def rename_file(op: FileOperation):
     try:
-        with open(path, "r") as f:
-            content = f.read()
-        return {"path": path, "content": content}
+        os.rename(op.path, op.new_path)
+        return {"status": "renamed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/delete-file")
-def delete_file(path: str = Query(...)):
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+@app.post("/file/copy")
+def copy_file(op: FileOperation):
     try:
-        os.remove(path)
-        return {"message": f"Deleted {path}"}
+        if os.path.isfile(op.path):
+            shutil.copy(op.path, op.new_path)
+        elif os.path.isdir(op.path):
+            shutil.copytree(op.path, op.new_path)
+        else:
+            raise FileNotFoundError("Not found")
+        return {"status": "copied"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/clear-folder")
-def clear_folder(folder: str = Query(...)):
-    if not os.path.exists(folder):
-        return {"message": "Folder does not exist, nothing to clear"}
-    try:
-        for f in os.listdir(folder):
-            path = os.path.join(folder, f)
-            if os.path.isfile(path):
-                os.remove(path)
-        return {"message": "All files deleted in folder"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# 로컬 실행용 코드 (Render 배포 시 필요 없음)
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
