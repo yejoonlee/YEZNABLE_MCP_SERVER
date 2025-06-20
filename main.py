@@ -8,7 +8,8 @@ import os
 
 from openapi_schema import schema  # 별도 파일로 저장된 스키마 import
 
-app = FastAPI()
+#app = FastAPI()
+app = FastAPI(openapi_url=None)
 
 # CORS 설정: GPT 요청 허용
 app.add_middleware(
