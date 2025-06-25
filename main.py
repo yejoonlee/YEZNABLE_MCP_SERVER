@@ -1,14 +1,17 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import shutil
 import os
+from dotenv import load_dotenv
 
 from openapi_schema import schema  # 별도 파일로 저장된 스키마 import
 
-#app = FastAPI()
+load_dotenv()
+SECRET_TOKEN = os.getenv("SECRET_TOKEN")
+
 app = FastAPI(openapi_url=None)
 
 # CORS 설정: GPT 요청 허용
@@ -19,8 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def verify_token(request: Request):
+    auth = request.headers.get("Authorization")
+    if auth != f"Bearer {SECRET_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 # 📘 /openapi.json → Custom GPT에서 참조
-@app.get("/openapi.json")
+@app.get("/openapi.json", dependencies=[Depends(verify_token)])
 def serve_openapi_schema():
     return JSONResponse(content=schema)
 
@@ -42,13 +50,13 @@ class PathWithNewPath(BaseModel):
 
 
 # 🔧 /run
-@app.post("/run")
+@app.post("/run", dependencies=[Depends(verify_token)])
 def run_command(data: Command):
     subprocess.Popen(data.command, shell=True)
     return {"status": "Command executed"}
 
 # 🔧 /run-and-capture
-@app.post("/run-and-capture")
+@app.post("/run-and-capture", dependencies=[Depends(verify_token)])
 def run_command_and_capture(data: Command):
     try:
         result = subprocess.run(data.command, shell=True, capture_output=True, text=True, timeout=30)
@@ -61,7 +69,7 @@ def run_command_and_capture(data: Command):
         return {"error": str(e)}
 
 # 🔧 /file/create
-@app.post("/file/create")
+@app.post("/file/create", dependencies=[Depends(verify_token)])
 def create_file(data: PathWithContent):
     try:
         with open(data.path, "w") as f:
@@ -71,7 +79,7 @@ def create_file(data: PathWithContent):
         return {"error": str(e)}
 
 # 🔧 /file/delete
-@app.post("/file/delete")
+@app.post("/file/delete", dependencies=[Depends(verify_token)])
 def delete_path(data: PathInput):
     try:
         if os.path.isdir(data.path):
@@ -85,7 +93,7 @@ def delete_path(data: PathInput):
         return {"error": str(e)}
 
 # 🔧 /file/rename
-@app.post("/file/rename")
+@app.post("/file/rename", dependencies=[Depends(verify_token)])
 def rename_path(data: PathWithNewPath):
     try:
         os.rename(data.path, data.new_path)
@@ -94,7 +102,7 @@ def rename_path(data: PathWithNewPath):
         return {"error": str(e)}
 
 # 🔧 /file/copy
-@app.post("/file/copy")
+@app.post("/file/copy", dependencies=[Depends(verify_token)])
 def copy_path(data: PathWithNewPath):
     try:
         if os.path.isdir(data.path):
