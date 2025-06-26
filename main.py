@@ -59,7 +59,7 @@ def run_command(data: Command):
 @app.post("/run-and-capture", dependencies=[Depends(verify_token)])
 def run_command_and_capture(data: Command):
     try:
-        result = subprocess.run(data.command, shell=True, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(data.command, shell=True, capture_output=True, text=True, timeout=600)
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
