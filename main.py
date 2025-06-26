@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from pydantic import BaseModel
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import shutil
@@ -11,6 +11,7 @@ from openapi_schema import schema  # 별도 파일로 저장된 스키마 import
 
 load_dotenv()
 SECRET_TOKEN = os.getenv("SECRET_TOKEN")
+GRAPH_FILE_PATH = os.getenv("GRAPH_FILE_PATH")
 
 app = FastAPI(openapi_url=None)
 
@@ -114,3 +115,8 @@ def copy_path(data: PathWithNewPath):
         return {"status": f"Copied to {data.new_path}"}
     except Exception as e:
         return {"error": str(e)}
+
+# 📘 /graph
+@app.get("/graph")
+def get_graph_image():
+    return FileResponse(f"{GRAPH_FILE_PATH}/graph.png", media_type="image/png")
