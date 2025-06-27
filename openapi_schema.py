@@ -197,6 +197,49 @@ schema = {
                     }
                 }
             }
+        },
+        "/file/update": {
+            "post": {
+                "operationId": "update_file",
+                "summary": "Update contents of a file using regex replacements",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {
+                                        "type": "string",
+                                        "description": "Path to the file to update"
+                                    },
+                                    "updates": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "pattern": {
+                                                    "type": "string"
+                                                },
+                                                "replacement": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": ["pattern", "replacement"]
+                                        }
+                                    }
+                                },
+                                "required": ["path", "updates"]
+                            }
+                        }    
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "File updated successfully"
+                    }
+                }
+            }
         }
     }
 }
