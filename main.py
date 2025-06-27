@@ -49,6 +49,14 @@ class PathWithNewPath(BaseModel):
     path: str
     new_path: str
 
+class UpdatePattern(BaseModel):
+    pattern: str
+    replacement: str
+
+class UpdateFileRequest(BaseModel):
+    path: str
+    updates: list[UpdatePattern]
+
 
 # 🔧 /run
 @app.post("/run", dependencies=[Depends(verify_token)])
@@ -115,6 +123,27 @@ def copy_path(data: PathWithNewPath):
         return {"status": f"Copied to {data.new_path}"}
     except Exception as e:
         return {"error": str(e)}
+
+# 🔧 /file/update
+@app.post("/file/update", dependencies=[Depends(verify_token)])
+def update_file(data: UpdateFileRequest):
+    if not os.path.exists(data.path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        with open(data.path, "r") as f:
+            content = f.read()
+
+        for update in data.updates:
+            content = re.sub(update.pattern, update.replacement, content)
+
+        with open(data.path, "w") as f:
+            f.write(content)
+
+        return {"status": "File updated successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 📘 /graph
 @app.get("/graph")
