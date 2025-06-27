@@ -203,7 +203,7 @@ schema = {
                 "operationId": "update_file",
                 "summary": "Update contents of a file using regex replacements",
                 "requestBody": {
-                    "required": true,
+                    "required": True,
                     "content": {
                         "application/json": {
                             "schema": {
