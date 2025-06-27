@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import shutil
 import os
+import re
 from dotenv import load_dotenv
 
 from openapi_schema import schema  # 별도 파일로 저장된 스키마 import
